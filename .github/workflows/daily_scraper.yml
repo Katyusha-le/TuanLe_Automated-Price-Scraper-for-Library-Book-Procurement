@@ -1,0 +1,61 @@
+name: Virtual Library ETL Pipeline
+
+# This tells GitHub WHEN to run the scripts.
+# The Harvester runs at 1:00 AM UTC, the Extractor runs at 1:30 AM UTC.
+on:
+  schedule:
+    - cron: '0 1 * * *'   # Harvester
+    - cron: '30 1 * * *'  # Extractor
+  workflow_dispatch:      # This adds a "Run Now" button so you can test it manually!
+
+jobs:
+  run-harvester:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python Libraries
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright Browsers
+        run: playwright install chromium
+
+      # This safely injects your secret JSON key into the server
+      - name: Create GCP Key File
+        run: echo '${{ secrets.GCP_CREDENTIALS }}' > gcp-key.json
+
+      - name: Run Harvester
+        run: python harvester.py
+        
+  run-extractor:
+    # This ensures the Extractor waits for the Harvester to finish!
+    needs: run-harvester
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Python Libraries
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright Browsers
+        run: playwright install chromium
+
+      - name: Create GCP Key File
+        run: echo '${{ secrets.GCP_CREDENTIALS }}' > gcp-key.json
+
+      - name: Run Extractor Worker
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python extractor.py
