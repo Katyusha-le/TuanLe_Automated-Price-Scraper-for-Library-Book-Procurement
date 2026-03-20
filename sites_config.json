@@ -15,7 +15,7 @@
       "https://www.fahasa.com/sach-trong-nuoc.html"
     ],
     "selectors": {
-      "book_link": "div.product-item-info a.product-image",
+      "book_link": "a.product-image",
       "next_page_button": "a.next_page"
     }
   }
