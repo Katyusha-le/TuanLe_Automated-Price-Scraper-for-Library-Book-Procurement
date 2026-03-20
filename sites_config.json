@@ -5,7 +5,7 @@
       "https://tiki.vn/nha-sach-tiki/c8322"
     ],
     "selectors": {
-      "book_link": "a.product-item",
+      "book_link": "a[href*='-p'][href*='.html']",
       "next_page_button": "a.next"
     }
   },
