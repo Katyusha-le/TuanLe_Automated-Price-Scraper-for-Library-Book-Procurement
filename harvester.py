@@ -53,32 +53,20 @@ async def run_discovery():
             for seed_url in site_data["seed_urls"]:
                 print(f" -> Visiting seed: {seed_url}")
                 try:
+                    # 1. Load the page (Old Way)
                     await page.goto(seed_url, wait_until="domcontentloaded", timeout=60000)
-
-                    # 1. Let the initial React payload load (fixes Cloudflare timing)
-                    await page.wait_for_timeout(3000)
-
-                    # 1. MOVED UP: Scroll immediately to wake up React's lazy loaders
+                    
+                    # 2. Hard pause to let Cloudflare (Fahasa) and React (Tiki) load fully
+                    print(" -> Waiting for network to settle...")
+                    await page.wait_for_timeout(5000)
+                    
+                    # 3. Scroll to trigger lazy loading (Old Way)
                     print(" -> Scrolling to trigger lazy loading...")
                     for _ in range(3):
                         await page.mouse.wheel(0, 1000)
                         await page.wait_for_timeout(1000)
                     
-                    # 2. Explicitly wait for the specific book selector to appear (max 15 seconds)
-                    try:
-                        print(f" -> Waiting for elements matching '{book_link_selector}' to load...")
-                        await page.wait_for_selector(book_link_selector, state="attached", timeout=10000)
-                    except:
-                        # 3. DEBUGGER: If it times out, print the page title to see if we hit a CAPTCHA
-                        page_title = await page.title()
-                        print(f" -> [!] Timed out waiting for products. The bot is currently looking at a page titled: '{page_title}'")
-                    
-                    # Scroll to trigger lazy-loaded images/links
-                    for _ in range(3):
-                        await page.mouse.wheel(0, 1000)
-                        await page.wait_for_timeout(1000)
-                    
-                    # Extract links using the selector from the JSON file
+                    # 4. Instantly grab whatever is on the screen (Old Way)
                     elements = await page.locator(book_link_selector).element_handles()
                     
                     found_links = []
