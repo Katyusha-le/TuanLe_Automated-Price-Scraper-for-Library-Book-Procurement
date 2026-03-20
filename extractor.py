@@ -9,6 +9,7 @@ from google.cloud import bigquery
 from groq import Groq
 from pydantic import BaseModel, ValidationError
 from typing import Optional, List
+import markdownify
 
 # 1. Authenticate with GCP and Groq
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "gcp-key.json"
@@ -114,25 +115,43 @@ async def scrape_dynamic_text(url):
             except:
                 pass 
 
-            # 5. Strip junk and extract text
-            await page.evaluate("document.querySelectorAll('script, style, nav, footer, img').forEach(el => el.remove())")
-            raw_text = await page.locator("body").inner_text()
+            # 5. AGGRESSIVE PRUNING: Destroy the mega-menus, headers, and sidebars to save space
+            cleanup_script = """
+                document.querySelectorAll('script, style, nav, footer, img, header, aside, iframe, svg, .menu, .header, #header').forEach(el => el.remove());
+            """
+            await page.evaluate(cleanup_script)
+            
+            # CHANGED: Grab inner_html instead of inner_text so we preserve structural tags (like tables)
+            raw_html = await page.locator("body").inner_html()
             
         except Exception as e:
             print(f"      [!] Playwright failed to load page: {e}")
-            raw_text = ""
+            raw_html = ""
             
         await browser.close()
         
-        # REDUCED: Cut down to 15,000 chars to prevent Groq API Token crashes
-        return raw_text[:15000]
+        # CHANGED: Convert HTML to Markdown. This turns HTML tables into Markdown tables, making it easy for the LLM to read.
+        if raw_html:
+            md_text = markdownify.markdownify(raw_html, strip=['a', 'img']).strip()
+            # Compress empty lines to pack more data into the AI's token limit
+            compressed_md = "\n".join([line.strip() for line in md_text.splitlines() if line.strip()])
+            return compressed_md[:15000]
+        
+        return ""
 
 def clean_data_with_ai(raw_text):
-    # 3. UPDATED PROMPT: Explicitly prevent massive overviews
+    # CHANGED: A completely universal prompt. It relies on structural deduction instead of specific keywords.
     prompt = f"""
-    You are an expert librarian data assistant. Extract the following information from the raw Vietnamese text and return ONLY a valid JSON object. 
-    If a piece of information is missing, use null. Preserve all Vietnamese accents perfectly.
-    CRITICAL: Keep the 'overview' concise (maximum 3 sentences) to save space.
+    You are a universal data extraction AI. You are receiving the Semantic Markdown structure of an international product page. 
+    Identify the core book product entity and extract its details. Translate whatever local language is used into our standard English JSON schema.
+    
+    UNIVERSAL LOGIC RULES:
+    - Deduce attributes based on their context in the Markdown (e.g., look at Markdown tables, lists, or headings near the title).
+    - Author/Publisher: Infer from contextual words regardless of language.
+    - Dates: Look for year or date formats. Return as string.
+    - Prices: Deduce original vs. current price based on context. Usually, the standard price is the higher number, and the current selling price is the lower number. Return pure integers (strip all currencies/symbols).
+    - If an attribute is truly missing from the page, use null.
+    - Keep the 'overview' concise (maximum 3 sentences) to save space.
     
     Required JSON Schema:
     {{
@@ -142,7 +161,7 @@ def clean_data_with_ai(raw_text):
       "overview": "Short Summary...", "keywords": ["keyword1", "keyword2"]
     }}
     
-    Raw text: {raw_text}
+    Markdown text: {raw_text}
     """
     try:
         chat_completion = groq_client.chat.completions.create(
