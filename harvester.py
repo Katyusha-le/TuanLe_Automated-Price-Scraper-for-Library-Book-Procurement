@@ -53,30 +53,44 @@ async def run_discovery():
             for seed_url in site_data["seed_urls"]:
                 print(f" -> Visiting seed: {seed_url}")
                 try:
-                    # 1. Load the page (Old Way)
                     await page.goto(seed_url, wait_until="domcontentloaded", timeout=60000)
                     
-                    # 2. Hard pause to let Cloudflare (Fahasa) and React (Tiki) load fully
                     print(" -> Waiting for network to settle...")
                     await page.wait_for_timeout(5000)
                     
-                    # 3. Scroll to trigger lazy loading (Old Way)
+                    # 1. SCROLL FIRST: Wakes up Fahasa and triggers Tiki's lazy loaders
                     print(" -> Scrolling to trigger lazy loading...")
                     for _ in range(3):
                         await page.mouse.wheel(0, 1000)
                         await page.wait_for_timeout(1000)
                     
-                    # 4. Instantly grab whatever is on the screen (Old Way)
-                    elements = await page.locator(book_link_selector).element_handles()
+                    # 2. THE ACTIVE HUNTER LOOP: Wait up to 10 seconds for the books to render
+                    elements = []
+                    for attempt in range(10):
+                        elements = await page.locator(book_link_selector).element_handles()
+                        if len(elements) > 0:
+                            break
+                        await page.wait_for_timeout(1000)
+                        
+                    # 3. DIAGNOSTIC DEBUGGER: If it's still 0, scan the page for what Tiki is hiding
+                    if len(elements) == 0:
+                        print(f" -> [!] Could not find '{book_link_selector}'. Layout has changed.")
+                        all_links = await page.locator("a").element_handles()
+                        debug_links = []
+                        for link in all_links:
+                            href = await link.get_attribute("href")
+                            # Look for any link that resembles a product or book
+                            if href and (".html" in href or "/p" in href or "spid" in href):
+                                debug_links.append(href)
+                        print(f" -> [DEBUG] Here are actual product links currently on the page: {debug_links[:5]}")
                     
+                    # 4. EXTRACT LINKS: Pull the URLs out of the elements the Hunter found
                     found_links = []
                     for el in elements:
                         href = await el.get_attribute("href")
                         if href:
-                            # Handle relative URLs (e.g., /book-name -> https://tiki.vn/book-name)
                             if href.startswith("/"):
                                 href = f"https://{domain}{href}"
-                            # Remove tracking parameters like ?spid=123
                             href = href.split("?")[0] 
                             
                             if href not in found_links:
