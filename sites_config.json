@@ -1,0 +1,22 @@
+{
+  "tiki": {
+    "domain": "tiki.vn",
+    "seed_urls": [
+      "https://tiki.vn/nha-sach-tiki/c8322"
+    ],
+    "selectors": {
+      "book_link": "a.product-item",
+      "next_page_button": "a.next"
+    }
+  },
+  "fahasa": {
+    "domain": "fahasa.com",
+    "seed_urls": [
+      "https://www.fahasa.com/sach-trong-nuoc.html"
+    ],
+    "selectors": {
+      "book_link": "div.product-item-info a.product-image",
+      "next_page_button": "a.next_page"
+    }
+  }
+}
