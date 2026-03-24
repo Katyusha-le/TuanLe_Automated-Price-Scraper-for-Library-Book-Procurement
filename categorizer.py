@@ -124,11 +124,13 @@ def run_categorizer():
             print(" -> [!] Pydantic rejected the AI's format.")
             
     if rows_to_insert:
-        errors = bq_client.insert_rows_json(CATEGORIES_TABLE, rows_to_insert)
-        if errors:
-            print(f"[!] BigQuery Insert Error: {errors}")
-        else:
+        try:
+            # Swapped to the Free-Tier compatible Load Job API
+            job = bq_client.load_table_from_json(rows_to_insert, CATEGORIES_TABLE)
+            job.result()  # Wait for the job to complete
             print(f"\n[+] Successfully categorized and saved {len(rows_to_insert)} books!")
+        except Exception as e:
+            print(f"[!] BigQuery Insert Error: {e}")
 
 if __name__ == "__main__":
     run_categorizer()
