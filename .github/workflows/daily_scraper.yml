@@ -5,6 +5,7 @@ on:
     # In production, they are scheduled 30 mins apart to ensure the queue is full
     - cron: '0 1 * * *'   # Harvester runs at 1:00 AM
     - cron: '30 1 * * *'  # Extractor runs at 1:30 AM
+    - cron: '0 2 * * *'   # Uncomment this line if you want the Categorizer to auto-run at 2:00 AM
   workflow_dispatch:      
 
 jobs:
@@ -56,3 +57,25 @@ jobs:
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python extractor.py
+
+  run-categorizer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4 
+
+      - name: Setup Python
+        uses: actions/setup-python@v5 
+        with:
+          python-version: '3.10'
+
+      - name: Install Python Libraries
+        run: pip install -r requirements.txt
+
+      - name: Create GCP Key File
+        run: echo '${{ secrets.GCP_CREDENTIALS }}' > gcp-key.json
+
+      - name: Run AI Categorizer
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python categorizer.py
