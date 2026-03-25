@@ -134,18 +134,23 @@ async def scrape_dynamic_text(url):
             except:
                 pass 
 
+            # PASS 1: Grab the unpruned HTML for the Metrics Agent (Just the body text to save tokens)
+            unpruned_html = await page.locator("body").inner_text()
+            metrics_snapshot = unpruned_html[:8000] # Take the top 8000 characters where ratings usually live
+            
             # 5. AGGRESSIVE PRUNING: Destroy the mega-menus, headers, and sidebars to save space
             cleanup_script = """
                 document.querySelectorAll('script, style, nav, footer, img, header, aside, iframe, svg, .menu, .header, #header').forEach(el => el.remove());
             """
             await page.evaluate(cleanup_script)
             
-            # CHANGED: Grab inner_html instead of inner_text so we preserve structural tags (like tables)
+            # PASS 2: Grab the pruned HTML for your Universal Core Agent
             raw_html = await page.locator("body").inner_html()
             
         except Exception as e:
             print(f"      [!] Playwright failed to load page: {e}")
             raw_html = ""
+            metrics_snapshot = ""
             
         await browser.close()
         
@@ -154,9 +159,10 @@ async def scrape_dynamic_text(url):
             md_text = markdownify.markdownify(raw_html, strip=['a', 'img']).strip()
             # Compress empty lines to pack more data into the AI's token limit
             compressed_md = "\n".join([line.strip() for line in md_text.splitlines() if line.strip()])
-            return compressed_md[:15000]
+            # RETURN BOTH: The core markdown, and the unpruned metrics snapshot
+            return compressed_md[:15000], metrics_snapshot
         
-        return ""
+        return "", ""
 
 def clean_data_with_ai(raw_text):
     # CHANGED: A completely universal prompt. It relies on structural deduction instead of specific keywords.
@@ -169,9 +175,6 @@ def clean_data_with_ai(raw_text):
     - Author/Publisher: Infer from contextual words regardless of language.
     - Dates: Look for year or date formats. Return as string.
     - Prices: Deduce original vs. current price based on context. Usually, the standard price is the higher number, and the current selling price is the lower number. Return pure integers (strip all currencies/symbols).
-    - Rating Score: Look for numbers out of 5, 10, or 100 (e.g., 4.5/5, 8.5/10). Return as a float. Return null if missing.
-    - Review Count: Look for text like "đánh giá", "nhận xét", or "reviews" next to a number. Return integer. Return 0 if missing.
-    - Bestseller: Set to true ONLY if you see badges or text explicitly stating 'Bán chạy', 'Best Seller', 'Top 10', etc.
     - If an attribute is truly missing from the page, use null.
     - Keep the 'overview' concise (maximum 3 sentences) to save space.
     
@@ -180,8 +183,7 @@ def clean_data_with_ai(raw_text):
       "title": "Book Title", "author": "Author Name", "publisher": "Publisher Name",
       "publish_date": "YYYY-MM-DD or MM/YYYY", "cover_type": "Hardcover or Paperback",
       "page_count": 300, "standard_price_vnd": 150000, "current_price_vnd": 120000,
-      "overview": "Short Summary...", "keywords": ["keyword1", "keyword2"],
-      "rating_score": 4.8, "review_count": 150, "is_bestseller": true
+      "overview": "Short Summary...", "keywords": ["keyword1", "keyword2"]
     }}
     
     Markdown text: {raw_text}
@@ -199,6 +201,42 @@ def clean_data_with_ai(raw_text):
         return chat_completion.choices[0].message.content
     except Exception as e:
         print(f"      [!] Groq API Error: {e}")
+        return "{}"
+
+def extract_metrics_with_ai(raw_html):
+    """A specialized sidecar agent strictly for demand proxies."""
+    prompt = f"""
+    You are an expert e-commerce data analyst. Look at this raw HTML/Text from a product page.
+    Your ONLY job is to find the product's rating score, review count, and whether it has a bestseller badge.
+    
+    UNIVERSAL LOGIC RULES:
+    - Rating Score: Look for a decimal out of 5, 10, or 100. Return as float.
+    - Review Count: Find the number of customer ratings/reviews. 
+      *CRITICAL:* Pay attention to international abbreviations! If you see a local abbreviation for "thousands" (e.g., 'k') or "millions" (e.g., 'tr' or 'm'), mathematically convert it to a pure integer (e.g., '5.5tr' = 5500000).
+    - Bestseller: true ONLY if there is a clear "Best Seller", "Top 10", or "Bán chạy" badge.
+    
+    Required JSON Schema:
+    {{
+      "rating_score": 4.7, 
+      "review_count": 5500000, 
+      "is_bestseller": true
+    }}
+    
+    Page Data: {raw_html}
+    """
+    try:
+        chat_completion = groq_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": "You output strict JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            model="llama-3.1-8b-instant", 
+            temperature=0, 
+            response_format={"type": "json_object"} 
+        )
+        return chat_completion.choices[0].message.content
+    except Exception as e:
+        print(f"      [!] Groq Metrics API Error: {e}")
         return "{}"
 
 # ---------------------------------------------------------
@@ -241,22 +279,36 @@ async def run_extractor_worker():
             # Lock the row instantly
             update_link_status(target_url, target_domain, 'IN_PROGRESS', retry_count)
             
-            raw_html_text = await scrape_dynamic_text(target_url)
+            # CHANGED: Unpack BOTH the markdown and the snapshot from Playwright
+            core_markdown, metrics_snapshot = await scrape_dynamic_text(target_url)
             
-            if not raw_html_text:
+            if not core_markdown:
                 print("-> SKIPPED: Could not extract text from page (Likely blocked or timeout).")
                 update_link_status(target_url, target_domain, "FAILED", retry_count + 1)
                 continue
                 
-            print("-> Text scraped. Sending to Llama 3.1...")
-            clean_json_str = clean_data_with_ai(raw_html_text)
+            print("-> Core Text scraped. Sending to Universal Agent...")
+            clean_json_str = clean_data_with_ai(core_markdown)
+            
+            # CHANGED: Send the unpruned HTML snapshot to the new Sidecar Agent
+            print("-> Metrics Snapshot scraped. Sending to Metrics Agent...")
+            metrics_json_str = extract_metrics_with_ai(metrics_snapshot)
             
             try:
+                # CHANGED: Load both JSONs generated by Groq
                 raw_record = json.loads(clean_json_str)
+                metrics_record = json.loads(metrics_json_str)
+                
+                # CHANGED: Safely merge the Metrics into the main Core Record
+                raw_record["rating_score"] = metrics_record.get("rating_score")
+                raw_record["review_count"] = metrics_record.get("review_count")
+                raw_record["is_bestseller"] = metrics_record.get("is_bestseller")
+
+                # Hand the combined dictionary over to Pydantic for validation/normalization
                 clean_record = BookData(**raw_record)
                 book_dict = clean_record.model_dump()
 
-                # ADDED: Stamp the exact exact time the AI finished reading it
+                # Stamp the exact time the AI finished reading it
                 book_dict["extracted_at"] = datetime.now(timezone.utc).isoformat()
                 
                 if book_dict.get("title") is None:
@@ -268,7 +320,7 @@ async def run_extractor_worker():
                     # Use Free-Tier compatible API for the final database too
                     job = bq_client.load_table_from_json([book_dict], DESTINATION_TABLE)
                     job.result()
-                    print("-> Successfully saved book to BigQuery library_database!")
+                    print("-> Successfully saved book and metrics to BigQuery library_database!")
                     update_link_status(target_url, target_domain, 'VISITED', retry_count)
                 
                 except Exception as e:
