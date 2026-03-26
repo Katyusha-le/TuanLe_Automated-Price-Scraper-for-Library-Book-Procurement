@@ -20,19 +20,19 @@ def load_master_catalog():
     bq_client = get_bq_client()
     PROJECT_ID = bq_client.project
     
+    # CHANGED: Replaced extracted_at with our new demand proxy metrics!
     query = f"""
         SELECT 
             title, author_name, publisher_name, category, 
             publish_date, current_price_vnd, rating_score, review_count, is_bestseller
         FROM `{PROJECT_ID}.book_scraping.v_library_master_catalog`
-        ORDER BY extracted_at DESC
+        ORDER BY is_bestseller DESC, review_count DESC NULLS LAST
         LIMIT 1000
     """
     
     try:
         return bq_client.query(query).to_dataframe()
     except BadRequest as e:
-        # This will print the exact BigQuery error to your dashboard
         st.error(f"🚨 BigQuery SQL Error: {e.message}")
         st.stop()
     except Exception as e:
