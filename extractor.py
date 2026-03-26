@@ -198,7 +198,7 @@ def clean_data_with_ai(raw_text):
                 {"role": "system", "content": "You output strict JSON only."},
                 {"role": "user", "content": prompt}
             ],
-            model="llama3-8b-8192", 
+            model="llama-3.1-8b-instant", 
             temperature=0, 
             response_format={"type": "json_object"} 
         )
@@ -234,7 +234,7 @@ def extract_metrics_with_ai(raw_html):
                 {"role": "system", "content": "You output strict JSON only."},
                 {"role": "user", "content": prompt}
             ],
-            model="llama3-8b-8192", 
+            model="llama-3.1-8b-instant", 
             temperature=0, 
             response_format={"type": "json_object"} 
         )
