@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from google.cloud import bigquery
 from google.oauth2 import service_account
+from google.api_core.exceptions import BadRequest
 
 # 1. Setup Page Configuration
 st.set_page_config(page_title="Virtual Library Intelligence", page_icon="📚", layout="wide")
@@ -27,7 +28,16 @@ def load_master_catalog():
         ORDER BY extracted_at DESC
         LIMIT 1000
     """
-    return bq_client.query(query).to_dataframe()
+    
+    try:
+        return bq_client.query(query).to_dataframe()
+    except BadRequest as e:
+        # This will print the exact BigQuery error to your dashboard
+        st.error(f"🚨 BigQuery SQL Error: {e.message}")
+        st.stop()
+    except Exception as e:
+        st.error(f"🚨 General Error: {e}")
+        st.stop()
 
 # 3. Build the UI
 st.title("📚 Virtual Library Intelligence Hub")
