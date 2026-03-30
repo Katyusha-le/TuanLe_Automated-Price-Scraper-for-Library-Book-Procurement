@@ -64,6 +64,23 @@ def load_price_history(selected_titles):
         st.error(f"🚨 Line Chart SQL Error: {e.message}")
         return pd.DataFrame()
 
+@st.cache_data(ttl=3600)
+def load_ai_insights():
+    bq_client = get_bq_client()
+    PROJECT_ID = bq_client.project
+    
+    query = f"""
+        SELECT analyzed_at, trending_categories, business_recommendation
+        FROM `{PROJECT_ID}.book_scraping.ai_market_insights`
+        ORDER BY analyzed_at DESC
+        LIMIT 1
+    """
+    try:
+        return bq_client.query(query).to_dataframe()
+    except Exception:
+        # Fails silently and returns empty if the table doesn't exist yet
+        return pd.DataFrame()
+
 # ---------------------------------------------------------
 # UI & DATA LOADING
 # ---------------------------------------------------------
@@ -72,6 +89,7 @@ st.markdown("Welcome to the automated market analytics dashboard.")
 
 with st.spinner("Fetching latest market data from BigQuery..."):
     df_catalog = load_master_catalog()
+    df_insights = load_ai_insights()
 
 # ---------------------------------------------------------
 # SIDEBAR FILTERS (Granular Search)
@@ -115,7 +133,6 @@ filtered_df = filtered_df[
 if only_bestsellers:
     filtered_df = filtered_df[filtered_df['is_bestseller'] == True]
 
-
 # ---------------------------------------------------------
 # TOP METRICS (Dynamic based on filters)
 # ---------------------------------------------------------
@@ -126,6 +143,32 @@ col1, col2, col3 = st.columns(3)
 col1.metric("Books in Current View", len(filtered_df))
 col2.metric("Bestsellers in View", int(filtered_df['is_bestseller'].sum()))
 col3.metric("Rating (Max | Med | Min)", rating_display)
+
+st.divider()
+
+# ---------------------------------------------------------
+# AI STRATEGY REPORT SECTION
+# ---------------------------------------------------------
+st.subheader("🤖 Daily AI Acquisition Strategy")
+if not df_insights.empty:
+    latest_report = df_insights.iloc[0]
+    report_date = pd.to_datetime(latest_report['analyzed_at']).strftime('%B %d, %Y - %H:%M UTC')
+    
+    st.caption(f"📅 Last Analyzed by Llama-3.3-70b-versatile: {report_date}")
+    
+    # Display Trends
+    st.info(f"**Identified Micro-Trends:**\n\n{latest_report['trending_categories']}")
+    
+    # Display Recommendations cleanly
+    rec_text = latest_report['business_recommendation']
+    if "REASON:" in rec_text:
+        buy_targets, reason = rec_text.split("REASON:")
+        st.success(f"🎯 **Action:** {buy_targets.replace('BUY:', '').strip()}")
+        st.write(f"**Strategic Justification:** {reason.strip()}")
+    else:
+        st.success(f"🎯 **Action:** {rec_text}")
+else:
+    st.warning("No AI insights generated yet. Ensure `trend_analyzer.py` has run successfully.")
 
 st.divider()
 
