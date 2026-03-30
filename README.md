@@ -1,6 +1,6 @@
 # Smart Virtual Library
 
-[![Virtual Library Dashboard](<img width="1920" height="794" alt="dashboard" src="https://github.com/user-attachments/assets/aad3e01e-50bf-4def-950d-e32beaf15b64" />)](https://smart-virtual-library-krcunpvgcpgqrwa5xbd3bd.streamlit.app/)
+[![Virtual Library Dashboard](dashboard/dashboard.png)](https://smart-virtual-library-krcunpvgcpgqrwa5xbd3bd.streamlit.app/)
 
 > 👆 **Click the image above to view the live interactive dashboard!**
 
@@ -13,7 +13,7 @@ The primary purpose of the **Smart Virtual Library** is to provide an automated,
 
 ## II. Scope
 The project encompasses an end-to-end data lifecycle, from raw web discovery to an interactive end-user dashboard:
-* **Target Platforms:** Automated scraping of major Vietnamese book retailers, specifically configured for **Tiki** and **Fahasa**.
+* **Target Platforms:** Automated scraping of major book retailers, specifically configured for **Tiki** and **Fahasa** (for now due to token limits, but can be applied to other book sites like Amazon, etc. as well).
 * **Data Acquisition:** Harvesting product URLs and bypassing modern anti-bot systems (e.g., Cloudflare) to extract raw HTML and Markdown data.
 * **Data Processing:** Utilizing LLMs to reliably parse unstructured web data into strict, validated JSON schemas containing core book metadata (Title, Author, Publisher, Dates, Prices) and demand proxies (Ratings, Review Counts, Bestseller badges).
 * **Classification:** Automatically assigning Universal Decimal Classification (UDC) codes to books based on their titles and overviews.
