@@ -28,7 +28,7 @@ FRONTIER_TABLE = f"{PROJECT_ID}.book_scraping.crawl_frontier"
 DESTINATION_TABLE = f"{PROJECT_ID}.book_scraping.library_database"
 
 # ---------------------------------------------------------
-# MODULE 4: THE DATA BOUNCER (PYDANTIC)
+# THE DATA BOUNCER (PYDANTIC)
 # ---------------------------------------------------------
 class BookData(BaseModel):
     title: Optional[str] = None
@@ -95,13 +95,13 @@ def get_batch_unvisited_links(limit=50):
     return list(bq_client.query(query).result())
 
 # ---------------------------------------------------------
-# CORE FUNCTIONS (Now with Stealth & Cloudflare bypass) 
+# CORE FUNCTIONS (With Stealth & Cloudflare bypass) 
 # ---------------------------------------------------------
 async def scrape_dynamic_text(url):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         
-        # 1. ADDED: User Agent Rotation & Stealth to bypass Fahasa Cloudflare
+        # 1. User Agent Rotation & Stealth to bypass Fahasa Cloudflare
         user_agents = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
@@ -113,7 +113,7 @@ async def scrape_dynamic_text(url):
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=45000)
 
-            # 2. CRITICAL FIX: Wait for the Cloudflare challenge to clear
+            # 2. Wait for the Cloudflare challenge to clear
             await page.wait_for_timeout(5000)
             
             # 3. DIAGNOSTIC: Check if we are still trapped on a security page
@@ -164,7 +164,7 @@ async def scrape_dynamic_text(url):
         return "", ""
 
 def clean_data_with_ai(raw_text):
-    # CHANGED: A completely universal prompt. It relies on structural deduction instead of specific keywords.
+    # An universal prompt. It relies on structural deduction instead of specific keywords.
     prompt = f"""
     You are a universal data extraction AI. You are receiving the Semantic Markdown structure of an international product page. 
     Identify the core book product entity and extract its details. Translate whatever local language is used into our standard English JSON schema.
@@ -282,7 +282,7 @@ async def run_extractor_worker():
             # Lock the row instantly
             update_link_status(target_url, target_domain, 'IN_PROGRESS', retry_count)
             
-            # CHANGED: Unpack BOTH the markdown and the snapshot from Playwright
+            # Unpack BOTH the markdown and the snapshot from Playwright
             core_markdown, metrics_snapshot = await scrape_dynamic_text(target_url)
             
             if not core_markdown:
@@ -293,7 +293,7 @@ async def run_extractor_worker():
             print("-> Core Text scraped. Sending to Universal Agent...")
             clean_json_str = clean_data_with_ai(core_markdown)
             
-            # CHANGED: Send the unpruned HTML snapshot to the new Sidecar Agent
+            # Send the unpruned HTML snapshot to the new Sidecar Agent
             print("-> Metrics Snapshot scraped. Sending to Metrics Agent...")
             metrics_json_str = extract_metrics_with_ai(metrics_snapshot)
             
@@ -307,7 +307,7 @@ async def run_extractor_worker():
                     """Prioritizes Core Agent. Only uses Sidecar if Core is completely missing."""
                     # If the core found a valid value (including 0 or False), trust it immediately.
                     if core_val is not None:
-                        # Optional: Log disagreements to the terminal so you can audit the Sidecar's accuracy
+                        # Log disagreements to the terminal so you can audit the Sidecar's accuracy
                         if sidecar_val is not None and core_val != sidecar_val:
                             print(f"      [~] Discrepancy on {field_name}: Core says {core_val}, Sidecar says {sidecar_val}. Trusting Core.")
                         return core_val
@@ -315,7 +315,7 @@ async def run_extractor_worker():
                     # If Core failed (is None), fall back to the Sidecar
                     return sidecar_val
                 
-                # Apply the safe merge to our three volatile metrics
+                # Apply the safe merge to three volatile metrics
                 raw_record["rating_score"] = safe_merge("rating_score", raw_record.get("rating_score"), metrics_record.get("rating_score"))
                 raw_record["review_count"] = safe_merge("review_count", raw_record.get("review_count"), metrics_record.get("review_count"))
                 
