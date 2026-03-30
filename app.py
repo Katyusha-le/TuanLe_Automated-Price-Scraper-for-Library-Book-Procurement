@@ -3,12 +3,12 @@ import pandas as pd
 from google.cloud import bigquery
 from google.oauth2 import service_account
 from google.api_core.exceptions import BadRequest
-import plotly.express as px # NEW: For interactive charts
+import plotly.express as px # For interactive charts
 
 # 1. Setup Page Configuration
 st.set_page_config(page_title="Virtual Library Intelligence", page_icon="📚", layout="wide")
 
-# 2. Securely Connect to BigQuery
+# 2. Connect to BigQuery
 @st.cache_resource
 def get_bq_client():
     gcp_creds = dict(st.secrets["gcp_service_account"])
@@ -31,7 +31,7 @@ def load_master_catalog():
     try:
         return bq_client.query(query).to_dataframe()
     except BadRequest as e:
-        st.error(f"🚨 BigQuery SQL Error: {e.message}")
+        st.error(f" BigQuery SQL Error: {e.message}")
         st.stop()
 
 @st.cache_data(ttl=3600)
@@ -43,7 +43,7 @@ def load_price_history(selected_titles):
     bq_client = get_bq_client()
     PROJECT_ID = bq_client.project
     
-    # CHANGED: We use standard SQL parameters instead of string hacking
+    # Use standard SQL parameters instead of string hacking
     query = f"""
         SELECT title, current_price_vnd, extracted_at
         FROM `{PROJECT_ID}.book_scraping.library_database`
@@ -152,7 +152,7 @@ with col_chart2:
     st.subheader("📈 Historical Price Tracker")
     st.markdown("Select books below to see their price changes over time.")
     
-    # User selects which books to graph (Max 5 to keep the chart clean)
+    # User selects which books to graph (Max 5 for now)
     books_to_graph = st.multiselect(
         "Select up to 5 books to compare:", 
         options=filtered_df['title'].dropna().unique(),
