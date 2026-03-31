@@ -47,6 +47,8 @@ def get_micro_gaps():
     query = f"""
         SELECT title, author_name, category, publish_date, rating_score, review_count, is_bestseller
         FROM `{PROJECT_ID}.book_scraping.v_gap_book_level`
+        -- NEW: Ignore books that are already in the purchased ledger
+        WHERE title NOT IN (SELECT title FROM `{PROJECT_ID}.book_scraping.purchased_books`)
         LIMIT 50
     """
     results = bq_client.query(query).result()
