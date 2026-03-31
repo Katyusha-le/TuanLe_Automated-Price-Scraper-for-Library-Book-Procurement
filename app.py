@@ -82,26 +82,24 @@ def load_ai_insights():
         return pd.DataFrame()
 
 def mark_books_as_purchased(selected_titles):
-    """Inserts purchased books into the BigQuery ledger using standard SQL."""
+    """Appends purchased books to the BigQuery ledger using a Free-Tier friendly Load Job."""
     bq_client = get_bq_client()
     PROJECT_ID = bq_client.project
+    table_id = f"{PROJECT_ID}.book_scraping.purchased_books"
     
-    # Use a standard INSERT statement combined with UNNEST to handle multiple books at once
-    query = f"""
-        INSERT INTO `{PROJECT_ID}.book_scraping.purchased_books` (title)
-        SELECT title FROM UNNEST(@selected_titles) AS title
-    """
+    # Format data for BigQuery JSON insertion
+    rows_to_insert = [{"title": title} for title in selected_titles]
     
-    # Securely pass the python list into the SQL query
-    job_config = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ArrayQueryParameter("selected_titles", "STRING", selected_titles)
-        ]
+    # Use a Load Job (Append) instead of DML (Insert) to bypass free-tier limits
+    job_config = bigquery.LoadJobConfig(
+        write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+        source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
     )
     
     try:
-        # .result() tells Python to wait until the insert is completely finished
-        bq_client.query(query, job_config=job_config).result() 
+        # .result() tells Python to wait until the append is completely finished
+        job = bq_client.load_table_from_json(rows_to_insert, table_id, job_config=job_config)
+        job.result() 
         return True
     except Exception as e:
         st.error(f"🚨 Database Write Error: {e}")
@@ -199,29 +197,6 @@ else:
 st.divider()
 
 # ---------------------------------------------------------
-# ACQUISITION CHECKOUT WORKFLOW
-# ---------------------------------------------------------
-st.subheader("🛒 Acquisition Checkout")
-st.markdown("Did you buy one of the recommended books? Mark it off here so the AI knows to stop recommending it.")
-
-# Dropdown to select books to checkout
-purchased_selection = st.multiselect(
-    "Select acquired books:", 
-    options=filtered_df['title'].dropna().unique()
-)
-
-if st.button("✅ Mark as Purchased", type="primary"):
-    if purchased_selection:
-        with st.spinner("Recording purchase to the ledger..."):
-            success = mark_books_as_purchased(purchased_selection)
-            if success:
-                st.success(f"Successfully recorded {len(purchased_selection)} books into the ledger!")
-                st.balloons()
-                # Clear the cache so the dashboard knows the database changed
-                st.cache_data.clear() 
-    else:
-        st.warning("Please select at least one book from the dropdown before clicking.")
-# ---------------------------------------------------------
 # VISUALIZATIONS
 # ---------------------------------------------------------
 col_chart1, col_chart2 = st.columns(2)
@@ -271,7 +246,40 @@ with col_chart2:
         st.info("👈 Select a book from the dropdown to generate the timeline.")
 
 # ---------------------------------------------------------
-# RAW DATA TABLE
+# INTERACTIVE CATALOG & CHECKOUT
 # ---------------------------------------------------------
-st.subheader("📋 Filtered Catalog Data")
-st.dataframe(filtered_df, use_container_width=True)
+st.subheader("📋 Master Catalog & Acquisition Checkout")
+st.markdown("Check the box in the **Buy** column and click Save to record your acquisitions.")
+    
+# Create a copy of the dataframe and insert a boolean checkbox column at the very front
+df_for_editing = filtered_df.copy()
+df_for_editing.insert(0, "Buy", False)
+    
+# Render the interactive data editor
+edited_df = st.data_editor(
+    df_for_editing,
+    column_config={
+        "Buy": st.column_config.CheckboxColumn(
+            "🛒 Buy",
+            help="Mark this book as purchased",
+            default=False,
+        )
+    },
+    disabled=filtered_df.columns.tolist(), # Lock all other columns so they can only edit the checkboxes
+    hide_index=True,
+    use_container_width=True
+)
+    
+# Check if the user has ticked any boxes
+books_to_buy = edited_df[edited_df["Buy"] == True]["title"].tolist()
+    
+# If boxes are checked, reveal the checkout button
+if len(books_to_buy) > 0:
+    if st.button(f"✅ Confirm Purchase of {len(books_to_buy)} Book(s)", type="primary"):
+        with st.spinner("Recording to BigQuery ledger..."):
+            success = mark_books_as_purchased(books_to_buy)
+            if success:
+                st.success("Successfully recorded! The AI will now ignore these books.")
+                st.balloons()
+                st.cache_data.clear() # Clear the cache
+                st.rerun() # Refresh the page instantly to remove them from the screen
