@@ -66,3 +66,69 @@ The dashboard is not just a read-only reporting tool; it is a fully interactive,
 * **Auto-Syncing AI:** The moment a book is checked out in the UI, the BigQuery views update instantly. The 70B AI Strategist reads this ledger and autonomously drops acquired books from its future Daily Recommendation Reports.
 
 ![Virtual Library Dashboard](dashboard/acquisitioncheckout.png)
+
+## IV. Database Architecture & Replication
+
+To replicate this project, you must create the necessary tables in Google BigQuery. 
+We have provided a [schema.sql](schema.sql) file containing the exact Data Definition Language (DDL) queries. Simply copy and paste the contents into your BigQuery SQL Workspace to initialize the environment.
+
+### ETL Data Flow
+```mermaid
+graph TD
+    %% Define External & Compute Nodes
+    Web((E-Commerce Sites))
+    Harvester[Harvester Bot]
+    Extractor[AI Extractor]
+    Categorizer[AI Librarian]
+    Trend[Trend Analyzer]
+    Dashboard{Streamlit Dashboard}
+
+    %% Define BigQuery Base Tables (Blue / Green)
+    Frontier[(crawl_frontier)]
+    RawDB[(library_database)]
+    CatDB[(ai_book_categories)]
+    Insights[(ai_market_insights)]
+    Ledger[(purchased_books)]
+
+    %% Define BigQuery Views (Yellow - Semantic Layer)
+    CleanView[[v_library_cleaned]]
+    MasterView[[v_library_master_catalog]]
+    GapViews[[v_gap_book/category_level]]
+
+    %% Core Data Extraction Flow
+    Web -- 1. Scans URLs --> Harvester
+    Harvester -- Saves Links --> Frontier
+    Extractor -- Fetches UNVISITED --> Frontier
+    Web -- 2. Scrapes HTML --> Extractor
+    Extractor -- Parses & Validates --> RawDB
+
+    %% Transformation & Categorization Flow
+    RawDB -- Deduplicates --> CleanView
+    CleanView -- Uncategorized Books --> Categorizer
+    Categorizer -- UDC Codes --> CatDB
+
+    %% Modeling & Analytics Flow
+    RawDB & CatDB -- Fact/Dim Joins --> MasterView
+    MasterView -- Calculates Gaps --> GapViews
+
+    %% AI Strategy Flow
+    GapViews -- Missing Market Books --> Trend
+    Ledger -- Filters Out Owned Books --> Trend
+    Trend -- Daily Strategy --> Insights
+    
+    %% Dashboard Flow
+    MasterView -. Filterable Catalog .-> Dashboard
+    RawDB -. Historical Prices .-> Dashboard
+    Insights -. AI Strategy Report .-> Dashboard
+    Dashboard -- Appends BUY/RETURN --> Ledger
+    
+    %% Styling
+    style Dashboard fill:#ff4b4b,stroke:#fff,stroke-width:2px,color:#fff
+    style Frontier fill:#4285f4,stroke:#fff,stroke-width:2px,color:#fff
+    style RawDB fill:#4285f4,stroke:#fff,stroke-width:2px,color:#fff
+    style CatDB fill:#4285f4,stroke:#fff,stroke-width:2px,color:#fff
+    style Insights fill:#4285f4,stroke:#fff,stroke-width:2px,color:#fff
+    style Ledger fill:#0f9d58,stroke:#fff,stroke-width:2px,color:#fff
+    style CleanView fill:#f4b400,stroke:#fff,stroke-width:2px,color:#fff
+    style MasterView fill:#f4b400,stroke:#fff,stroke-width:2px,color:#fff
+    style GapViews fill:#f4b400,stroke:#fff,stroke-width:2px,color:#fff
