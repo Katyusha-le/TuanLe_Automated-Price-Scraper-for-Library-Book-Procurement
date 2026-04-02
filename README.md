@@ -91,37 +91,37 @@ graph TD
     Ledger[(purchased_books)]
 
     %% Define BigQuery Views (Yellow - Semantic Layer)
-    CleanView[[v_library_cleaned]]
-    MasterView[[v_library_master_catalog]]
-    GapViews[[v_gap_book or category_level]]
+    CleanView[(v_library_cleaned)]
+    MasterView[(v_library_master_catalog)]
+    GapViews[(v_gap_views)]
 
     %% Core Data Extraction Flow
-    Web -- 1. Scans URLs --> Harvester
-    Harvester -- Saves Links --> Frontier
-    Extractor -- Fetches UNVISITED --> Frontier
-    Web -- 2. Scrapes HTML --> Extractor
-    Extractor -- Parses and Validates --> RawDB
+    Web -->|1. Scans URLs| Harvester
+    Harvester -->|Saves Links| Frontier
+    Extractor -->|Fetches UNVISITED| Frontier
+    Web -->|2. Scrapes HTML| Extractor
+    Extractor -->|Parses & Validates| RawDB
 
     %% Transformation & Categorization Flow
-    RawDB -- Deduplicates --> CleanView
-    CleanView -- Uncategorized Books --> Categorizer
-    Categorizer -- UDC Codes --> CatDB
+    RawDB -->|Deduplicates| CleanView
+    CleanView -->|Uncategorized Books| Categorizer
+    Categorizer -->|UDC Codes| CatDB
 
     %% Modeling & Analytics Flow
-    RawDB -- Fact and Dim Joins --> MasterView
-    CatDB -- Fact and Dim Joins --> MasterView
-    MasterView -- Calculates Gaps --> GapViews
+    RawDB -->|Fact/Dim Joins| MasterView
+    CatDB -->|Fact/Dim Joins| MasterView
+    MasterView -->|Calculates Gaps| GapViews
 
     %% AI Strategy Flow
-    GapViews -- Missing Market Books --> Trend
-    Ledger -- Filters Out Owned Books --> Trend
-    Trend -- Daily Strategy --> Insights
+    GapViews -->|Missing Market Books| Trend
+    Ledger -->|Filters Out Owned Books| Trend
+    Trend -->|Daily Strategy| Insights
     
     %% Dashboard Flow
-    MasterView -. Filterable Catalog .-> Dashboard
-    RawDB -. Historical Prices .-> Dashboard
-    Insights -. AI Strategy Report .-> Dashboard
-    Dashboard -- Appends BUY or RETURN --> Ledger
+    MasterView -.->|Filterable Catalog| Dashboard
+    RawDB -.->|Historical Prices| Dashboard
+    Insights -.->|AI Strategy Report| Dashboard
+    Dashboard -->|Appends BUY/RETURN| Ledger
     
     %% Styling
     style Dashboard fill:#ff4b4b,stroke:#fff,stroke-width:2px,color:#fff
