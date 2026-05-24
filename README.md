@@ -1,8 +1,6 @@
 # Smart Virtual Library / Automated Price Scraper for Library's Book Procurement
 
-[![Virtual Library Dashboard](dashboard/dashboard.png)](https://smart-virtual-library-krcunpvgcpgqrwa5xbd3bd.streamlit.app/)
-
-> 👆 **Click the image above to view the live interactive dashboard!**
+![Virtual Library Dashboard](dashboard/dashboard.png)
 
 An intelligent, fully automated ETL pipeline and analytics dashboard designed to monitor e-commerce book markets, extract structured data, categorize literature, and generate strategic acquisition recommendations using Large Language Models (LLMs) and Google BigQuery.
 
